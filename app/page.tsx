@@ -120,8 +120,12 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl, articleUrl: url.trim() }),
       });
-      const { results } = await res.json();
-      setPublishResults(results);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to publish");
+        return;
+      }
+      setPublishResults(data.results || []);
       loadHistory();
     } catch {
       setError("Failed to publish");
