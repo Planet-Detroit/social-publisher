@@ -19,10 +19,22 @@ interface PublishResult {
 }
 
 interface HistoryEntry {
-  articleUrl: string;
-  imageUrl: string | null;
+  article_url: string;
+  article_title: string | null;
+  image_url: string | null;
   platforms: PublishResult[];
-  publishedAt: string;
+  published_at: string;
+}
+
+interface DraftEntry {
+  id: number;
+  article_url: string | null;
+  article_title: string | null;
+  image_url: string | null;
+  posts: Record<string, string>;
+  mode: string;
+  freeform_text: string | null;
+  created_at: string;
 }
 
 const PLATFORMS = [
@@ -51,6 +63,8 @@ export default function Home() {
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [drafts, setDrafts] = useState<DraftEntry[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -62,7 +76,10 @@ export default function Home() {
   const loadHistory = useCallback(() => {
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
   }, []);
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  const loadDrafts = useCallback(() => {
+    fetch("/api/drafts").then(r => r.json()).then(setDrafts).catch(() => {});
+  }, []);
+  useEffect(() => { loadHistory(); loadDrafts(); }, [loadHistory, loadDrafts]);
 
   function resetState() {
     setArticle(null);
@@ -162,7 +179,7 @@ export default function Home() {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl || null, articleUrl: url.trim() }),
+        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl || null, articleUrl: url.trim(), articleTitle: article?.title || null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -187,6 +204,63 @@ export default function Home() {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+  }
+
+  async function handleSaveDraft() {
+    if (!posts) return;
+    setSavingDraft(true);
+    try {
+      const res = await fetch("/api/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articleUrl: url.trim() || null,
+          articleTitle: article?.title || null,
+          articleBody: article?.body || null,
+          imageUrl: article?.imageUrl || null,
+          posts,
+          mode,
+          freeformText: freeformText || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to save draft");
+        return;
+      }
+      loadDrafts();
+    } catch {
+      setError("Failed to save draft");
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  function loadDraft(draft: DraftEntry) {
+    setMode(draft.mode as "article" | "freeform");
+    setUrl(draft.article_url || "");
+    setFreeformText(draft.freeform_text || "");
+    if (draft.article_title) {
+      setArticle({
+        title: draft.article_title,
+        description: "",
+        body: "",
+        imageUrl: draft.image_url,
+        source: "draft",
+      });
+    }
+    setPosts(draft.posts);
+    setPublishResults(null);
+    setSelectedPlatforms([]);
+  }
+
+  async function handleDeleteDraft(id: number) {
+    try {
+      await fetch(`/api/drafts?id=${id}`, { method: "DELETE" });
+      loadDrafts();
+    } catch {
+      setError("Failed to delete draft");
+    }
   }
 
   function toggleSelectAll() {
@@ -444,9 +518,9 @@ export default function Home() {
             })}
           </div>
 
-          {/* Publish */}
-          {selectedPlatforms.length > 0 && (
-            <div className="flex items-center gap-3 mb-8">
+          {/* Actions */}
+          <div className="flex items-center gap-3 mb-8">
+            {selectedPlatforms.length > 0 && (
               <button onClick={handlePublish} disabled={publishing}
                 className="px-8 py-3 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
                 style={{ background: "#EA5A39" }}
@@ -454,9 +528,16 @@ export default function Home() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = "#EA5A39"; }}>
                 {publishing ? "Publishing..." : `Publish Now to ${selectedPlatforms.length} Platform${selectedPlatforms.length !== 1 ? "s" : ""}`}
               </button>
-              {publishing && <span className="text-sm" style={{ color: "#515151" }}>This may take a moment...</span>}
-            </div>
-          )}
+            )}
+            <button onClick={handleSaveDraft} disabled={savingDraft}
+              className="px-6 py-3 rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
+              style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#515151" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+              {savingDraft ? "Saving..." : "Save Draft"}
+            </button>
+            {publishing && <span className="text-sm" style={{ color: "#515151" }}>This may take a moment...</span>}
+          </div>
 
           {/* Results */}
           {publishResults && (
@@ -477,6 +558,43 @@ export default function Home() {
         </>
       )}
 
+      {/* Drafts */}
+      {drafts.length > 0 && (
+        <div className="mt-12 pt-8" style={{ borderTop: "2px solid #2982C4" }}>
+          <h2 className="text-lg font-bold mb-4" style={{ color: "#111111" }}>Saved Drafts</h2>
+          <div className="space-y-2">
+            {drafts.map((draft) => (
+              <div key={draft.id} className="rounded-lg px-4 py-3 flex items-center gap-4"
+                style={{ background: "#FFFFFF", border: "1px solid #CCCCCC" }}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate" style={{ color: "#111111" }}>
+                    {draft.article_title || draft.freeform_text?.substring(0, 80) || "Untitled draft"}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "#999" }}>
+                    {new Date(draft.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {" \u2014 "}{Object.keys(draft.posts).length} platforms
+                  </div>
+                </div>
+                <button onClick={() => loadDraft(draft)}
+                  className="text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                  style={{ background: "#2982C4", color: "#FFFFFF" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#1e6da3"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#2982C4"; }}>
+                  Load
+                </button>
+                <button onClick={() => handleDeleteDraft(draft.id)}
+                  className="text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                  style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#999" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#DD3333"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}>
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* History */}
       {history.length > 0 && (
         <div className="mt-12 pt-8" style={{ borderTop: "2px solid #2982C4" }}>
@@ -486,16 +604,21 @@ export default function Home() {
               <div key={i} className="rounded-lg px-4 py-3 flex items-center gap-4"
                 style={{ background: "#FFFFFF", border: "1px solid #CCCCCC" }}>
                 <div className="flex-1 min-w-0">
-                  <a href={entry.articleUrl} target="_blank" rel="noopener noreferrer"
-                    className="text-sm hover:underline truncate block" style={{ color: "#2982C4" }}>
-                    {entry.articleUrl}
-                  </a>
+                  <div className="text-sm font-medium truncate" style={{ color: "#111111" }}>
+                    {entry.article_title || entry.article_url || "Post"}
+                  </div>
+                  {entry.article_url && (
+                    <a href={entry.article_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs hover:underline truncate block mt-0.5" style={{ color: "#2982C4" }}>
+                      {entry.article_url}
+                    </a>
+                  )}
                   <div className="text-xs mt-1" style={{ color: "#999" }}>
-                    {new Date(entry.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </div>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0">
-                  {entry.platforms.filter(p => p.status === "published").map(p => {
+                  {(Array.isArray(entry.platforms) ? entry.platforms : []).filter(p => p.status === "published").map(p => {
                     const platform = PLATFORMS.find(pl => pl.key === p.platform);
                     return platform ? (
                       <span key={p.platform} className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold"
