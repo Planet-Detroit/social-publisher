@@ -2,6 +2,14 @@
 
 import { usePathname } from "next/navigation";
 
+const tools = [
+  { label: "Brief Generator", href: "https://brief.tools.planetdetroit.org/" },
+  { label: "Newsletter Builder", href: "https://newsletter.tools.planetdetroit.org/" },
+  { label: "Civic Action", href: "https://civic.tools.planetdetroit.org/" },
+  { label: "Events", href: "https://events.planetdetroit.org/admin" },
+  { label: "Social Publisher", href: null }, // current tool — no link
+];
+
 export default function ToolNav() {
   const pathname = usePathname();
   if (pathname === "/login") return null;
@@ -11,45 +19,74 @@ export default function ToolNav() {
     window.location.href = "/login";
   };
 
-  const linkStyle = { fontSize: "12px", color: "#94a3b8", textDecoration: "none" as const, padding: "4px 10px", borderRadius: "4px", transition: "color 0.15s" };
-  const divider = <span style={{ color: "#475569", fontSize: "10px" }}>/</span>;
-
   return (
-    <nav style={{ background: "#1e293b", padding: "0 16px", display: "flex", alignItems: "center", gap: "4px", height: "32px", fontFamily: "Arial, Helvetica, sans-serif" }}>
-      <span style={{ fontSize: "11px", color: "#94a3b8", letterSpacing: "0.5px", marginRight: "12px", textTransform: "uppercase" as const, fontWeight: "bold" }}>
+    <nav style={{
+      background: "#333333",
+      padding: "0 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+      height: "34px",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif",
+    }}>
+      <span style={{
+        fontSize: "11px",
+        color: "#2982C4",
+        letterSpacing: "0.5px",
+        marginRight: "12px",
+        textTransform: "uppercase" as const,
+        fontWeight: "bold",
+      }}>
         PD Tools
       </span>
-      <a href="https://brief.tools.planetdetroit.org/" style={linkStyle}
+
+      {tools.map((tool, i) => (
+        <span key={tool.label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          {i > 0 && <span style={{ color: "#666", fontSize: "10px" }}>/</span>}
+          {tool.href ? (
+            <a
+              href={tool.href}
+              style={{
+                fontSize: "12px",
+                color: "#999",
+                textDecoration: "none",
+                padding: "4px 10px",
+                borderRadius: "4px",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#999")}
+            >
+              {tool.label}
+            </a>
+          ) : (
+            <span style={{
+              fontSize: "12px",
+              color: "#ffffff",
+              padding: "4px 10px",
+              fontWeight: "600",
+            }}>
+              {tool.label}
+            </span>
+          )}
+        </span>
+      ))}
+
+      <button
+        onClick={handleLogout}
+        style={{
+          fontSize: "11px",
+          color: "#999",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          marginLeft: "auto",
+          padding: "4px 8px",
+          transition: "color 0.15s",
+        }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}>
-        Brief Generator
-      </a>
-      {divider}
-      <a href="https://newsletter.tools.planetdetroit.org/" style={linkStyle}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}>
-        Newsletter Builder
-      </a>
-      {divider}
-      <a href="https://civic.tools.planetdetroit.org/" style={linkStyle}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}>
-        Civic Action
-      </a>
-      {divider}
-      <a href="https://events.planetdetroit.org/admin" style={linkStyle}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}>
-        Events
-      </a>
-      {divider}
-      <span style={{ fontSize: "12px", color: "#ffffff", padding: "4px 10px", fontWeight: "600" }}>
-        Social Publisher
-      </span>
-      <button onClick={handleLogout}
-        style={{ fontSize: "11px", color: "#94a3b8", background: "none", border: "none", cursor: "pointer", marginLeft: "auto", padding: "4px 8px", transition: "color 0.15s" }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}>
+        onMouseLeave={(e) => (e.currentTarget.style.color = "#999")}
+      >
         Sign out
       </button>
     </nav>
