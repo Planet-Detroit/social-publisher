@@ -33,13 +33,18 @@ const PLATFORMS = [
   { key: "linkedin", label: "LinkedIn", icon: "in", color: "#0A66C2", charLimit: null },
 ];
 
+const ALL_PLATFORM_KEYS = PLATFORMS.map(p => p.key);
+
 export default function Home() {
   const router = useRouter();
+  const [mode, setMode] = useState<"article" | "freeform">("article");
   const [url, setUrl] = useState("");
+  const [freeformText, setFreeformText] = useState("");
   const [article, setArticle] = useState<ArticleData | null>(null);
   const [fetching, setFetching] = useState(false);
   const [posts, setPosts] = useState<Record<string, string> | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [regeneratingPlatform, setRegeneratingPlatform] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [publishResults, setPublishResults] = useState<PublishResult[] | null>(null);
@@ -59,13 +64,19 @@ export default function Home() {
   }, []);
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  async function handleFetchUrl() {
-    if (!url.trim()) return;
-    setFetching(true);
-    setError("");
+  function resetState() {
     setArticle(null);
     setPosts(null);
     setPublishResults(null);
+    setSelectedPlatforms([]);
+    setEditingPost(null);
+    setError("");
+  }
+
+  async function handleFetchUrl() {
+    if (!url.trim()) return;
+    setFetching(true);
+    resetState();
     try {
       const res = await fetch("/api/fetch-url", {
         method: "POST",
@@ -86,7 +97,12 @@ export default function Home() {
   }
 
   async function handleGenerate() {
-    if (!article) return;
+    const title = mode === "article" ? article?.title : "";
+    const body = mode === "article" ? article?.body : freeformText;
+    const articleUrl = mode === "article" ? url.trim() : "";
+
+    if (!title && !body) return;
+
     setGenerating(true);
     setError("");
     setPosts(null);
@@ -95,7 +111,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: article.title, body: article.body, url: url.trim() }),
+        body: JSON.stringify({ title: title || "", body: body || "", url: articleUrl }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -110,6 +126,34 @@ export default function Home() {
     }
   }
 
+  async function handleRegeneratePlatform(platform: string) {
+    setRegeneratingPlatform(platform);
+    try {
+      const title = mode === "article" ? article?.title : "";
+      const body = mode === "article" ? article?.body : freeformText;
+      const articleUrl = mode === "article" ? url.trim() : "";
+
+      const res = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform, title: title || "", body: body || "", url: articleUrl }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to regenerate");
+        return;
+      }
+      const { text } = await res.json();
+      if (posts) {
+        setPosts({ ...posts, [platform]: text });
+      }
+    } catch {
+      setError("Failed to regenerate post");
+    } finally {
+      setRegeneratingPlatform(null);
+    }
+  }
+
   async function handlePublish() {
     if (!posts || !selectedPlatforms.length) return;
     setPublishing(true);
@@ -118,7 +162,7 @@ export default function Home() {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl, articleUrl: url.trim() }),
+        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl || null, articleUrl: url.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -145,12 +189,23 @@ export default function Home() {
     setTimeout(() => setCopiedField(null), 2000);
   }
 
+  function toggleSelectAll() {
+    if (selectedPlatforms.length === ALL_PLATFORM_KEYS.length) {
+      setSelectedPlatforms([]);
+    } else {
+      setSelectedPlatforms([...ALL_PLATFORM_KEYS]);
+    }
+  }
+
+  const allSelected = posts && selectedPlatforms.length === ALL_PLATFORM_KEYS.length;
+  const imageUrl = article?.imageUrl || null;
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold mb-1" style={{ color: "#111111" }}>Social Publisher</h1>
-        <p className="text-sm" style={{ color: "#515151" }}>Paste an article URL to generate and publish social media posts.</p>
+        <p className="text-sm" style={{ color: "#515151" }}>Generate and publish social media posts across all platforms.</p>
       </div>
 
       {error && (
@@ -160,32 +215,76 @@ export default function Home() {
         </div>
       )}
 
-      {/* URL Input */}
-      <div className="flex gap-3 mb-8">
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleFetchUrl(); } }}
-          placeholder="https://planetdetroit.org/2026/03/your-article..."
-          className="flex-1 px-4 py-3 rounded-lg text-sm focus:outline-none focus:ring-2"
-          style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
-          autoFocus
-        />
+      {/* Mode Toggle */}
+      <div className="flex gap-1 mb-6 p-1 rounded-lg inline-flex" style={{ background: "#F0F0F0" }}>
         <button
-          onClick={handleFetchUrl}
-          disabled={fetching || !url.trim()}
-          className="px-6 py-3 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
-          style={{ background: "#2982C4" }}
-          onMouseEnter={(e) => { if (!fetching) e.currentTarget.style.background = "#1e6da3"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "#2982C4"; }}
-        >
-          {fetching ? "Fetching..." : "Fetch Article"}
+          onClick={() => { setMode("article"); resetState(); setFreeformText(""); }}
+          className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style={{ background: mode === "article" ? "#FFFFFF" : "transparent", color: mode === "article" ? "#111111" : "#515151", boxShadow: mode === "article" ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>
+          From Article
+        </button>
+        <button
+          onClick={() => { setMode("freeform"); resetState(); setUrl(""); }}
+          className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style={{ background: mode === "freeform" ? "#FFFFFF" : "transparent", color: mode === "freeform" ? "#111111" : "#515151", boxShadow: mode === "freeform" ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>
+          Create Post
         </button>
       </div>
 
-      {/* Article Preview */}
-      {article && (
+      {/* Article Mode: URL Input */}
+      {mode === "article" && (
+        <div className="flex gap-3 mb-8">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleFetchUrl(); } }}
+            placeholder="https://planetdetroit.org/2026/03/your-article..."
+            className="flex-1 px-4 py-3 rounded-lg text-sm focus:outline-none focus:ring-2"
+            style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
+            autoFocus
+          />
+          <button
+            onClick={handleFetchUrl}
+            disabled={fetching || !url.trim()}
+            className="px-6 py-3 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
+            style={{ background: "#2982C4" }}
+            onMouseEnter={(e) => { if (!fetching) e.currentTarget.style.background = "#1e6da3"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#2982C4"; }}>
+            {fetching ? "Fetching..." : "Fetch Article"}
+          </button>
+        </div>
+      )}
+
+      {/* Freeform Mode: Text Input */}
+      {mode === "freeform" && (
+        <div className="mb-8">
+          <textarea
+            value={freeformText}
+            onChange={(e) => setFreeformText(e.target.value)}
+            placeholder="Write your post content here... Claude will adapt it for each platform."
+            rows={5}
+            className="w-full px-4 py-3 rounded-lg text-sm focus:outline-none focus:ring-2 resize-y mb-3"
+            style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
+            autoFocus
+          />
+          <p className="text-xs mb-3" style={{ color: "#999" }}>
+            Tip: Press Ctrl+Cmd+Space (Mac) or Win+. (Windows) to add emoji
+          </p>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !freeformText.trim()}
+            className="px-6 py-2.5 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
+            style={{ background: "#EA5A39" }}
+            onMouseEnter={(e) => { if (!generating) e.currentTarget.style.background = "#d44a2b"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#EA5A39"; }}>
+            {generating ? "Generating Posts..." : "Generate Social Posts"}
+          </button>
+        </div>
+      )}
+
+      {/* Article Preview (article mode only) */}
+      {mode === "article" && article && (
         <div className="rounded-lg p-5 mb-8" style={{ background: "#FFFFFF", border: "1px solid #CCCCCC" }}>
           <div className="flex gap-5">
             {article.imageUrl && (
@@ -215,11 +314,34 @@ export default function Home() {
       {/* Post Preview Cards */}
       {posts && (
         <>
+          {/* Select All / Deselect All */}
+          <div className="flex items-center justify-between mb-4">
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium" style={{ color: "#515151" }}>
+              <input
+                type="checkbox"
+                checked={!!allSelected}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 accent-[#2982C4]"
+              />
+              {allSelected ? "Deselect All" : "Select All Platforms"}
+            </label>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="text-xs px-3 py-1.5 rounded font-medium transition-colors"
+              style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#515151" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+              {generating ? "Regenerating..." : "Regenerate All"}
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
             {PLATFORMS.filter(({ key }) => posts[key]).map(({ key, label, icon, color, charLimit }) => {
               const isSelected = selectedPlatforms.includes(key);
               const charCount = (posts[key] || "").length;
               const overLimit = charLimit ? charCount > charLimit : false;
+              const isRegenerating = regeneratingPlatform === key;
 
               return (
                 <div key={key} className="rounded-xl overflow-hidden transition-all"
@@ -266,14 +388,16 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {article?.imageUrl && (
+                    {imageUrl && (
                       <div className="rounded-lg overflow-hidden mb-3" style={{ background: "#F0F0F0" }}>
-                        <img src={article.imageUrl} alt="" className="w-full h-44 object-cover"
+                        <img src={imageUrl} alt="" className="w-full h-44 object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       </div>
                     )}
 
-                    {editingPost === key ? (
+                    {isRegenerating ? (
+                      <div className="text-sm py-4 text-center" style={{ color: "#999" }}>Regenerating...</div>
+                    ) : editingPost === key ? (
                       <textarea value={posts[key]} onChange={(e) => updatePost(key, e.target.value)}
                         rows={Math.max(4, (posts[key] || "").split("\n").length + 1)}
                         className="w-full text-sm leading-relaxed p-2.5 rounded-md focus:outline-none focus:ring-2 resize-y"
@@ -298,6 +422,14 @@ export default function Home() {
                       onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
                       {editingPost === key ? "Done" : "Edit"}
+                    </button>
+                    <button onClick={() => handleRegeneratePlatform(key)}
+                      disabled={isRegenerating}
+                      className="text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                      style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: isRegenerating ? "#999" : "#2982C4" }}
+                      onMouseEnter={(e) => { if (!isRegenerating) e.currentTarget.style.background = "#e5e5e5"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+                      {isRegenerating ? "..." : "Regenerate"}
                     </button>
                     <button onClick={() => copyToClipboard(posts[key], key)}
                       className="text-xs px-3 py-1.5 rounded font-medium transition-colors"

@@ -12,31 +12,35 @@ export async function POST(req: NextRequest) {
   }
 
   const { title, body, url } = await req.json();
-  if (!title || !url) {
-    return NextResponse.json({ error: 'Title and URL are required' }, { status: 400 });
+  if (!title && !body) {
+    return NextResponse.json({ error: 'Title or content is required' }, { status: 400 });
   }
 
   try {
     const client = new Anthropic();
 
-    const prompt = `Generate social media posts for this article from Planet Detroit.
+    const hasUrl = url && url.trim();
+    const urlInstruction = hasUrl
+      ? `IMPORTANT: Include the article URL in every post. The URL is: ${url}\nFor Instagram, put "Link in bio" and include the URL at the end of the caption.`
+      : 'No URL to include.';
+    const charNote = hasUrl ? ' INCLUDING the URL' : '';
 
-ARTICLE DETAILS:
-- Headline: ${title}
-- URL: ${url}
-- Content: ${(body || '').substring(0, 3000)}
+    const prompt = `Generate social media posts for Planet Detroit.
 
-IMPORTANT: Include the article URL in every post. The URL is: ${url}
-For Instagram, put "Link in bio" and include the URL at the end of the caption.
+${title ? `HEADLINE: ${title}` : ''}
+${hasUrl ? `URL: ${url}` : ''}
+CONTENT: ${(body || title || '').substring(0, 3000)}
+
+${urlInstruction}
 
 Return a JSON object with these keys:
-- "instagram": Instagram caption with relevant hashtags (include #PlanetDetroit #Detroit #Michigan). End with the URL.
-- "facebook": Facebook post (2-3 short paragraphs, informative). Include the URL.
-- "twitter": MUST be under 250 characters total INCLUDING the URL. Very concise — one punchy sentence plus the URL. Do NOT include hashtags. Count your characters carefully.
-- "bluesky": MUST be under 270 characters total INCLUDING the URL. One or two short sentences plus the URL. Count your characters carefully.
-- "linkedin": Professional post for LinkedIn (2-3 paragraphs, highlight significance and community relevance). Include the URL.
+- "instagram": Instagram caption with relevant hashtags (include #PlanetDetroit #Detroit #Michigan).${hasUrl ? ' End with the URL.' : ''}
+- "facebook": Facebook post (2-3 short paragraphs, informative).${hasUrl ? ' Include the URL.' : ''}
+- "twitter": MUST be under 250 characters total${charNote}. Very concise — one punchy sentence${hasUrl ? ' plus the URL' : ''}. Do NOT include hashtags. Count your characters carefully.
+- "bluesky": MUST be under 270 characters total${charNote}. One or two short sentences${hasUrl ? ' plus the URL' : ''}. Count your characters carefully.
+- "linkedin": Professional post for LinkedIn (2-3 paragraphs, highlight significance and community relevance).${hasUrl ? ' Include the URL.' : ''}
 
-CRITICAL: The twitter post MUST be under 250 characters and the bluesky post MUST be under 270 characters, including the URL. Count every character including spaces, punctuation, and the full URL.
+CRITICAL: The twitter post MUST be under 250 characters and the bluesky post MUST be under 270 characters${charNote}. Count every character including spaces, punctuation${hasUrl ? ', and the full URL' : ''}.
 
 Return ONLY the JSON object, no other text.`;
 
