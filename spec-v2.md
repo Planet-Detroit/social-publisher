@@ -159,14 +159,15 @@ Scheduling and drafts require persistent storage. Options:
 
 ---
 
-## 4. Implementation Priority
+## 4. Implementation Status
 
-1. **Select All + Regenerate Single** — Quick wins, no database needed
-2. **Post Without URL** — Small UI change, no database needed
-3. **Database setup** — Vercel Postgres, needed for drafts and scheduling
-4. **Draft Saving** — Depends on database
-5. **Image Upload** — Needs Vercel Blob for storage
-6. **Scheduling** — Most complex, needs database + background job (Vercel Cron)
+1. **Select All + Regenerate Single** — DONE
+2. **Post Without URL (freeform mode)** — DONE
+3. **Database setup (Neon Postgres)** — DONE
+4. **Draft Saving** — DONE
+5. **Publish History** — DONE
+6. **Image Upload/Swap** — TODO (needs Vercel Blob for storage)
+7. **Post Scheduling** — TODO (needs Vercel Cron for background jobs)
 
 ---
 
