@@ -29,16 +29,17 @@ export default function ToolNav() {
       height: "34px",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif",
     }}>
-      <span style={{
+      <a href="https://tools.planetdetroit.org/" style={{
         fontSize: "11px",
         color: "#2982C4",
         letterSpacing: "0.5px",
         marginRight: "12px",
         textTransform: "uppercase" as const,
         fontWeight: "bold",
+        textDecoration: "none",
       }}>
         PD Tools
-      </span>
+      </a>
 
       {tools.map((tool, i) => (
         <span key={tool.label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
