@@ -65,6 +65,8 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [drafts, setDrafts] = useState<DraftEntry[]>([]);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [customImageUrl, setCustomImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -87,7 +89,60 @@ export default function Home() {
     setPublishResults(null);
     setSelectedPlatforms([]);
     setEditingPost(null);
+    setCustomImageUrl(null);
     setError("");
+  }
+
+  // The effective image URL: custom upload overrides article image
+  const effectiveImageUrl = customImageUrl || article?.imageUrl || null;
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side validation
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Accepted: JPG, PNG, WebP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large. Maximum size is 5MB.');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to upload image');
+        return;
+      }
+      const { url } = await res.json();
+      setCustomImageUrl(url);
+    } catch {
+      setError('Failed to upload image');
+    } finally {
+      setUploading(false);
+      // Reset the file input so the same file can be re-selected
+      e.target.value = '';
+    }
+  }
+
+  function handleRemoveImage() {
+    // Clean up the blob in the background (best effort)
+    if (customImageUrl) {
+      fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: customImageUrl }),
+      }).catch(() => {});
+    }
+    setCustomImageUrl(null);
   }
 
   async function handleFetchUrl() {
@@ -179,7 +234,7 @@ export default function Home() {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: article?.imageUrl || null, articleUrl: url.trim(), articleTitle: article?.title || null }),
+        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: effectiveImageUrl, articleUrl: url.trim(), articleTitle: article?.title || null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -217,7 +272,7 @@ export default function Home() {
           articleUrl: url.trim() || null,
           articleTitle: article?.title || null,
           articleBody: article?.body || null,
-          imageUrl: article?.imageUrl || null,
+          imageUrl: effectiveImageUrl,
           posts,
           mode,
           freeformText: freeformText || null,
@@ -240,14 +295,18 @@ export default function Home() {
     setMode(draft.mode as "article" | "freeform");
     setUrl(draft.article_url || "");
     setFreeformText(draft.freeform_text || "");
-    if (draft.article_title) {
-      setArticle({
-        title: draft.article_title,
-        description: "",
-        body: "",
-        imageUrl: draft.image_url,
-        source: "draft",
-      });
+    // If the draft has a Vercel Blob image, restore it as a custom image
+    // Otherwise treat it as the article's original image
+    if (draft.image_url && draft.image_url.includes('blob.vercel-storage.com')) {
+      setCustomImageUrl(draft.image_url);
+      if (draft.article_title) {
+        setArticle({ title: draft.article_title, description: "", body: "", imageUrl: null, source: "draft" });
+      }
+    } else {
+      setCustomImageUrl(null);
+      if (draft.article_title) {
+        setArticle({ title: draft.article_title, description: "", body: "", imageUrl: draft.image_url, source: "draft" });
+      }
     }
     setPosts(draft.posts);
     setPublishResults(null);
@@ -272,7 +331,7 @@ export default function Home() {
   }
 
   const allSelected = posts && selectedPlatforms.length === ALL_PLATFORM_KEYS.length;
-  const imageUrl = article?.imageUrl || null;
+  const imageUrl = effectiveImageUrl;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -342,6 +401,32 @@ export default function Home() {
             style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
             autoFocus
           />
+
+          {/* Image upload for freeform mode */}
+          <div className="flex items-center gap-3 mb-3">
+            {imageUrl && (
+              <img src={imageUrl} alt="" className="w-20 h-14 object-cover rounded"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            )}
+            <label className="px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors"
+              style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#515151" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+              {uploading ? "Uploading..." : imageUrl ? "Change Image" : "Add Image (optional)"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                onChange={handleImageUpload} disabled={uploading} />
+            </label>
+            {imageUrl && (
+              <button onClick={handleRemoveImage}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#999" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#DD3333"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}>
+                Remove
+              </button>
+            )}
+          </div>
+
           <p className="text-xs mb-3" style={{ color: "#999" }}>
             Tip: Press Ctrl+Cmd+Space (Mac) or Win+. (Windows) to add emoji
           </p>
@@ -361,9 +446,11 @@ export default function Home() {
       {mode === "article" && article && (
         <div className="rounded-lg p-5 mb-8" style={{ background: "#FFFFFF", border: "1px solid #CCCCCC" }}>
           <div className="flex gap-5">
-            {article.imageUrl && (
-              <img src={article.imageUrl} alt="" className="w-44 h-32 object-cover rounded-lg flex-shrink-0"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            {imageUrl && (
+              <div className="flex-shrink-0 relative group">
+                <img src={imageUrl} alt="" className="w-44 h-32 object-cover rounded-lg"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              </div>
             )}
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold mb-1" style={{ color: "#111111" }}>{article.title}</h2>
@@ -375,6 +462,31 @@ export default function Home() {
               </p>
             </div>
           </div>
+
+          {/* Image Controls */}
+          <div className="flex items-center gap-2 mt-4">
+            <label className="px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors"
+              style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#515151" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+              {uploading ? "Uploading..." : imageUrl ? "Change Image" : "Add Image"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                onChange={handleImageUpload} disabled={uploading} />
+            </label>
+            {imageUrl && (
+              <button onClick={handleRemoveImage}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#999" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#DD3333"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}>
+                Remove Image
+              </button>
+            )}
+            {customImageUrl && (
+              <span className="text-xs" style={{ color: "#2982C4" }}>Custom image uploaded</span>
+            )}
+          </div>
+
           <button onClick={handleGenerate} disabled={generating}
             className="mt-4 px-6 py-2.5 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
             style={{ background: "#EA5A39" }}

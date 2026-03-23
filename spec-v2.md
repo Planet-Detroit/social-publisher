@@ -166,7 +166,7 @@ Scheduling and drafts require persistent storage. Options:
 3. **Database setup (Neon Postgres)** — DONE
 4. **Draft Saving** — DONE
 5. **Publish History** — DONE
-6. **Image Upload/Swap** — TODO (needs Vercel Blob for storage)
+6. **Image Upload/Swap** — DONE (Vercel Blob storage)
 7. **Post Scheduling** — TODO (needs Vercel Cron for background jobs)
 
 ---

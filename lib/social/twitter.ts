@@ -12,12 +12,13 @@ function getClient(): TwitterApi {
   return new TwitterApi({ appKey: apiKey, appSecret: apiSecret, accessToken, accessSecret });
 }
 
-async function loadImageBuffer(imageUrl: string | null): Promise<Buffer | null> {
+async function loadImageBuffer(imageUrl: string | null): Promise<{ buffer: Buffer; mimeType: string } | null> {
   if (!imageUrl) return null;
   try {
     const resp = await fetch(imageUrl);
     if (!resp.ok) return null;
-    return Buffer.from(await resp.arrayBuffer());
+    const mimeType = resp.headers.get('content-type') || 'image/jpeg';
+    return { buffer: Buffer.from(await resp.arrayBuffer()), mimeType };
   } catch { return null; }
 }
 
@@ -26,10 +27,10 @@ export async function publish(text: string, imageUrl: string | null): Promise<{ 
     const client = getClient();
     const tweetOptions: { text: string; media?: { media_ids: [string] } } = { text };
 
-    const imageBuffer = await loadImageBuffer(imageUrl);
-    if (imageBuffer) {
+    const imageData = await loadImageBuffer(imageUrl);
+    if (imageData) {
       try {
-        const mediaId = await client.v1.uploadMedia(imageBuffer, { mimeType: 'image/jpeg' });
+        const mediaId = await client.v1.uploadMedia(imageData.buffer, { mimeType: imageData.mimeType });
         tweetOptions.media = { media_ids: [mediaId] };
       } catch (mediaErr: unknown) {
         const msg = mediaErr instanceof Error ? mediaErr.message : String(mediaErr);
