@@ -38,6 +38,17 @@ interface DraftEntry {
   created_at: string;
 }
 
+interface ScheduledEntry {
+  id: number;
+  article_url: string | null;
+  article_title: string | null;
+  platforms: string[];
+  scheduled_at: string;
+  status: string;
+  publish_results: PublishResult[] | null;
+  created_at: string;
+}
+
 const PLATFORMS = [
   { key: "instagram", label: "Instagram", icon: "IG", color: "#E1306C", charLimit: null },
   { key: "facebook", label: "Facebook", icon: "f", color: "#1877F2", charLimit: null },
@@ -72,6 +83,10 @@ export default function Home() {
   const [platformImages, setPlatformImages] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
   const [uploadingPlatform, setUploadingPlatform] = useState<string | null>(null);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledEntry[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -86,7 +101,12 @@ export default function Home() {
   const loadDrafts = useCallback(() => {
     fetch("/api/drafts").then(r => r.json()).then(setDrafts).catch(() => {});
   }, []);
-  useEffect(() => { loadHistory(); loadDrafts(); }, [loadHistory, loadDrafts]);
+  const loadScheduled = useCallback(() => {
+    fetch("/api/scheduled").then(r => r.json()).then((data) => {
+      if (Array.isArray(data)) setScheduledPosts(data);
+    }).catch(() => {});
+  }, []);
+  useEffect(() => { loadHistory(); loadDrafts(); loadScheduled(); }, [loadHistory, loadDrafts, loadScheduled]);
 
   function resetState() {
     setArticle(null);
@@ -97,6 +117,8 @@ export default function Home() {
     setCustomImageUrl(null);
     setPlatformImages({});
     setShowEmojiPicker(false);
+    setShowScheduler(false);
+    setScheduledTime("");
     setError("");
   }
 
@@ -337,6 +359,57 @@ export default function Home() {
       setError("Failed to publish");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleSchedule() {
+    if (!posts || !selectedPlatforms.length || !scheduledTime) return;
+    setScheduling(true);
+    setError("");
+    try {
+      // Convert the local datetime-local value to an ISO string
+      // The input is in the user's local time; we send as-is and let the server store it
+      const scheduledAt = new Date(scheduledTime).toISOString();
+
+      const res = await fetch("/api/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          posts,
+          platforms: selectedPlatforms,
+          imageUrl: effectiveImageUrl,
+          platformImages,
+          articleUrl: url.trim(),
+          articleTitle: article?.title || null,
+          scheduledAt,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to schedule");
+        return;
+      }
+      setShowScheduler(false);
+      setScheduledTime("");
+      loadScheduled();
+    } catch {
+      setError("Failed to schedule post");
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function handleCancelScheduled(id: number) {
+    try {
+      const res = await fetch(`/api/scheduled?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to cancel");
+        return;
+      }
+      loadScheduled();
+    } catch {
+      setError("Failed to cancel scheduled post");
     }
   }
 
@@ -780,15 +853,28 @@ export default function Home() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-4">
             {selectedPlatforms.length > 0 && (
-              <button onClick={handlePublish} disabled={publishing}
-                className="px-8 py-3 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
-                style={{ background: "#EA5A39" }}
-                onMouseEnter={(e) => { if (!publishing) e.currentTarget.style.background = "#d44a2b"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#EA5A39"; }}>
-                {publishing ? "Publishing..." : `Publish Now to ${selectedPlatforms.length} Platform${selectedPlatforms.length !== 1 ? "s" : ""}`}
-              </button>
+              <>
+                <button onClick={handlePublish} disabled={publishing}
+                  className="px-8 py-3 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
+                  style={{ background: "#EA5A39" }}
+                  onMouseEnter={(e) => { if (!publishing) e.currentTarget.style.background = "#d44a2b"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#EA5A39"; }}>
+                  {publishing ? "Publishing..." : `Publish Now to ${selectedPlatforms.length} Platform${selectedPlatforms.length !== 1 ? "s" : ""}`}
+                </button>
+                <button onClick={() => setShowScheduler(!showScheduler)}
+                  className="px-6 py-3 rounded-lg transition-colors text-sm font-semibold"
+                  style={{
+                    background: showScheduler ? "#2982C4" : "#FFFFFF",
+                    border: "1px solid #2982C4",
+                    color: showScheduler ? "#FFFFFF" : "#2982C4",
+                  }}
+                  onMouseEnter={(e) => { if (!showScheduler) e.currentTarget.style.background = "#eef6fc"; }}
+                  onMouseLeave={(e) => { if (!showScheduler) e.currentTarget.style.background = "#FFFFFF"; }}>
+                  Schedule
+                </button>
+              </>
             )}
             <button onClick={handleSaveDraft} disabled={savingDraft}
               className="px-6 py-3 rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold"
@@ -799,6 +885,39 @@ export default function Home() {
             </button>
             {publishing && <span className="text-sm" style={{ color: "#515151" }}>This may take a moment...</span>}
           </div>
+
+          {/* Schedule Picker */}
+          {showScheduler && selectedPlatforms.length > 0 && (
+            <div className="rounded-lg p-4 mb-8" style={{ background: "#eef6fc", border: "1px solid #2982C4" }}>
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: "#111111" }}>
+                    Schedule for (your local time)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    className="px-3 py-2.5 rounded-lg text-sm w-full focus:outline-none focus:ring-2"
+                    style={{ border: "1px solid #CCCCCC", background: "#FFFFFF" }}
+                  />
+                </div>
+                <button
+                  onClick={handleSchedule}
+                  disabled={scheduling || !scheduledTime}
+                  className="px-6 py-2.5 text-white rounded-lg disabled:opacity-50 transition-colors text-sm font-semibold whitespace-nowrap"
+                  style={{ background: "#2982C4" }}
+                  onMouseEnter={(e) => { if (!scheduling) e.currentTarget.style.background = "#1e6da3"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#2982C4"; }}>
+                  {scheduling ? "Scheduling..." : `Schedule ${selectedPlatforms.length} Post${selectedPlatforms.length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+              <p className="text-xs mt-2" style={{ color: "#515151" }}>
+                Posts will be published automatically at the scheduled time.
+              </p>
+            </div>
+          )}
 
           {/* Results */}
           {publishResults && (
@@ -817,6 +936,71 @@ export default function Home() {
             </div>
           )}
         </>
+      )}
+
+      {/* Scheduled Posts */}
+      {scheduledPosts.length > 0 && (
+        <div className="mt-12 pt-8" style={{ borderTop: "2px solid #2982C4" }}>
+          <h2 className="text-lg font-bold mb-1" style={{ color: "#111111" }}>Scheduled Posts</h2>
+          <p className="text-xs mb-4" style={{ color: "#999" }}>Posts queued for automatic publishing</p>
+          <div className="space-y-2">
+            {scheduledPosts.map((sp) => {
+              const isUpcoming = sp.status === "scheduled";
+              const isFailed = sp.status === "failed";
+              return (
+                <div key={sp.id} className="rounded-lg px-4 py-3 flex items-center gap-4"
+                  style={{
+                    background: "#FFFFFF",
+                    border: `1px solid ${isFailed ? "#fecaca" : isUpcoming ? "#2982C4" : "#CCCCCC"}`,
+                  }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: "#111111" }}>
+                      {sp.article_title || "Freeform post"}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: isUpcoming ? "#2982C4" : isFailed ? "#DD3333" : "#999" }}>
+                      {isUpcoming ? "Scheduled for " : isFailed ? "Failed — " : "Published "}
+                      {new Date(sp.scheduled_at).toLocaleDateString("en-US", {
+                        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                      })}
+                    </div>
+                    <div className="flex gap-1 mt-1.5">
+                      {(sp.platforms as string[]).map((p) => {
+                        const platform = PLATFORMS.find(pl => pl.key === p);
+                        return platform ? (
+                          <span key={p} className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold"
+                            style={{ background: platform.color, opacity: isUpcoming ? 1 : 0.5 }}>{platform.icon}</span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {isUpcoming && (
+                      <button onClick={() => handleCancelScheduled(sp.id)}
+                        className="text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                        style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#999" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "#DD3333"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}>
+                        Cancel
+                      </button>
+                    )}
+                    {sp.status === "published" && (
+                      <span className="text-xs px-3 py-1.5 rounded font-medium"
+                        style={{ background: "#ecfdf5", color: "#065f46" }}>
+                        Published
+                      </span>
+                    )}
+                    {isFailed && (
+                      <span className="text-xs px-3 py-1.5 rounded font-medium"
+                        style={{ background: "#fef2f2", color: "#991b1b" }}>
+                        Failed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Drafts */}

@@ -167,7 +167,7 @@ Scheduling and drafts require persistent storage. Options:
 4. **Draft Saving** — DONE
 5. **Publish History** — DONE
 6. **Image Upload/Swap** — DONE (Vercel Blob storage)
-7. **Post Scheduling** — TODO (needs Vercel Cron for background jobs)
+7. **Post Scheduling** — DONE (Vercel Cron every minute)
 
 ---
 

@@ -38,5 +38,22 @@ export async function ensureTables() {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS scheduled_posts (
+      id SERIAL PRIMARY KEY,
+      article_url TEXT,
+      article_title TEXT,
+      image_url TEXT,
+      platform_images JSONB DEFAULT '{}',
+      posts JSONB NOT NULL,
+      platforms JSONB NOT NULL,
+      scheduled_at TIMESTAMPTZ NOT NULL,
+      platform_times JSONB DEFAULT '{}',
+      status TEXT DEFAULT 'scheduled',
+      publish_results JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
   initialized = true;
 }
