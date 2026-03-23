@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
 interface ArticleData {
   title: string;
@@ -49,9 +50,11 @@ const ALL_PLATFORM_KEYS = PLATFORMS.map(p => p.key);
 
 export default function Home() {
   const router = useRouter();
+  const freeformRef = useRef<HTMLTextAreaElement>(null);
   const [mode, setMode] = useState<"article" | "freeform">("article");
   const [url, setUrl] = useState("");
   const [freeformText, setFreeformText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [article, setArticle] = useState<ArticleData | null>(null);
   const [fetching, setFetching] = useState(false);
   const [posts, setPosts] = useState<Record<string, string> | null>(null);
@@ -93,7 +96,27 @@ export default function Home() {
     setEditingPost(null);
     setCustomImageUrl(null);
     setPlatformImages({});
+    setShowEmojiPicker(false);
     setError("");
+  }
+
+  function handleEmojiClick(emojiData: EmojiClickData) {
+    const emoji = emojiData.emoji;
+    const textarea = freeformRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newText = freeformText.slice(0, start) + emoji + freeformText.slice(end);
+      setFreeformText(newText);
+      // Restore cursor position after the inserted emoji
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const pos = start + emoji.length;
+        textarea.setSelectionRange(pos, pos);
+      });
+    } else {
+      setFreeformText(prev => prev + emoji);
+    }
   }
 
   // The effective image URL: custom upload overrides article image
@@ -459,15 +482,45 @@ export default function Home() {
       {/* Freeform Mode: Text Input */}
       {mode === "freeform" && (
         <div className="mb-8">
-          <textarea
-            value={freeformText}
-            onChange={(e) => setFreeformText(e.target.value)}
-            placeholder="Write your post content here... Claude will adapt it for each platform."
-            rows={5}
-            className="w-full px-4 py-3 rounded-lg text-sm focus:outline-none focus:ring-2 resize-y mb-3"
-            style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
-            autoFocus
-          />
+          <div className="relative">
+            <textarea
+              ref={freeformRef}
+              value={freeformText}
+              onChange={(e) => setFreeformText(e.target.value)}
+              placeholder="Write your post content here... Claude will adapt it for each platform."
+              rows={5}
+              className="w-full px-4 py-3 pb-12 rounded-lg text-sm focus:outline-none focus:ring-2 resize-y"
+              style={{ border: "1px solid #CCCCCC", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}
+              autoFocus
+            />
+            {/* Toolbar inside textarea */}
+            <div className="absolute bottom-2 left-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="w-8 h-8 rounded flex items-center justify-center text-lg transition-colors"
+                style={{ background: showEmojiPicker ? "#e5e5e5" : "transparent", color: "#515151" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = showEmojiPicker ? "#e5e5e5" : "transparent"; }}
+                title="Add emoji">
+                😀
+              </button>
+              <span className="text-xs" style={{ color: "#999" }}>{freeformText.length} chars</span>
+            </div>
+          </div>
+
+          {/* Emoji Picker Dropdown */}
+          {showEmojiPicker && (
+            <div className="relative mb-3">
+              <div className="absolute z-10 mt-1">
+                <EmojiPicker onEmojiClick={handleEmojiClick} width={350} height={400} />
+              </div>
+              {/* Click-away backdrop */}
+              <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(false)} />
+            </div>
+          )}
+
+          {!showEmojiPicker && <div className="mb-3" />}
 
           {/* Image upload for freeform mode */}
           <div className="flex items-center gap-3 mb-3">
@@ -494,9 +547,6 @@ export default function Home() {
             )}
           </div>
 
-          <p className="text-xs mb-3" style={{ color: "#999" }}>
-            Tip: Press Ctrl+Cmd+Space (Mac) or Win+. (Windows) to add emoji
-          </p>
           <button
             onClick={handleGenerate}
             disabled={generating || !freeformText.trim()}
