@@ -859,7 +859,8 @@ export default function Home() {
       {/* History */}
       {history.length > 0 && (
         <div className="mt-12 pt-8" style={{ borderTop: "2px solid #2982C4" }}>
-          <h2 className="text-lg font-bold mb-4" style={{ color: "#111111" }}>Recent Posts</h2>
+          <h2 className="text-lg font-bold mb-1" style={{ color: "#111111" }}>Recent Posts</h2>
+          <p className="text-xs mb-4" style={{ color: "#999" }}>Last 20 published posts</p>
           <div className="space-y-2">
             {history.map((entry, i) => (
               <div key={i} className="rounded-lg px-4 py-3 flex items-center gap-4"
