@@ -66,7 +66,9 @@ export default function Home() {
   const [drafts, setDrafts] = useState<DraftEntry[]>([]);
   const [savingDraft, setSavingDraft] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState<string | null>(null);
+  const [platformImages, setPlatformImages] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+  const [uploadingPlatform, setUploadingPlatform] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -90,6 +92,7 @@ export default function Home() {
     setSelectedPlatforms([]);
     setEditingPost(null);
     setCustomImageUrl(null);
+    setPlatformImages({});
     setError("");
   }
 
@@ -143,6 +146,63 @@ export default function Home() {
       }).catch(() => {});
     }
     setCustomImageUrl(null);
+  }
+
+  // Upload a different image for a specific platform
+  async function handlePlatformImageUpload(platform: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Accepted: JPG, PNG, WebP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large. Maximum size is 5MB.');
+      return;
+    }
+
+    setUploadingPlatform(platform);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to upload image');
+        return;
+      }
+      const { url } = await res.json();
+      setPlatformImages(prev => ({ ...prev, [platform]: url }));
+    } catch {
+      setError('Failed to upload image');
+    } finally {
+      setUploadingPlatform(null);
+      e.target.value = '';
+    }
+  }
+
+  function handleRemovePlatformImage(platform: string) {
+    const url = platformImages[platform];
+    if (url) {
+      fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      }).catch(() => {});
+    }
+    setPlatformImages(prev => {
+      const next = { ...prev };
+      delete next[platform];
+      return next;
+    });
+  }
+
+  // Get the image URL for a specific platform (platform override > shared custom > article)
+  function getImageForPlatform(platform: string): string | null {
+    return platformImages[platform] || effectiveImageUrl;
   }
 
   async function handleFetchUrl() {
@@ -234,7 +294,14 @@ export default function Home() {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ posts, platforms: selectedPlatforms, imageUrl: effectiveImageUrl, articleUrl: url.trim(), articleTitle: article?.title || null }),
+        body: JSON.stringify({
+          posts,
+          platforms: selectedPlatforms,
+          imageUrl: effectiveImageUrl,
+          platformImages,
+          articleUrl: url.trim(),
+          articleTitle: article?.title || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -528,6 +595,9 @@ export default function Home() {
               const charCount = (posts[key] || "").length;
               const overLimit = charLimit ? charCount > charLimit : false;
               const isRegenerating = regeneratingPlatform === key;
+              const cardImageUrl = getImageForPlatform(key);
+              const hasCustomPlatformImage = !!platformImages[key];
+              const isUploadingThis = uploadingPlatform === key;
 
               return (
                 <div key={key} className="rounded-xl overflow-hidden transition-all"
@@ -574,11 +644,40 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {imageUrl && (
-                      <div className="rounded-lg overflow-hidden mb-3" style={{ background: "#F0F0F0" }}>
-                        <img src={imageUrl} alt="" className="w-full h-44 object-cover"
+                    {cardImageUrl && (
+                      <div className="rounded-lg overflow-hidden mb-3 relative group" style={{ background: "#F0F0F0" }}>
+                        <img src={cardImageUrl} alt="" className="w-full h-44 object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        {/* Per-platform image controls overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 flex gap-1.5 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.6))" }}>
+                          <label className="px-2 py-1 rounded text-xs font-medium cursor-pointer"
+                            style={{ background: "rgba(255,255,255,0.9)", color: "#333" }}>
+                            {isUploadingThis ? "..." : "Swap"}
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                              onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
+                          </label>
+                          {hasCustomPlatformImage && (
+                            <button onClick={() => handleRemovePlatformImage(key)}
+                              className="px-2 py-1 rounded text-xs font-medium"
+                              style={{ background: "rgba(255,255,255,0.9)", color: "#DD3333" }}>
+                              Reset
+                            </button>
+                          )}
+                        </div>
                       </div>
+                    )}
+                    {!cardImageUrl && (
+                      <label className="rounded-lg mb-3 flex items-center justify-center cursor-pointer transition-colors h-20"
+                        style={{ background: "#F0F0F0", border: "1px dashed #CCCCCC" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}>
+                        <span className="text-xs font-medium" style={{ color: "#999" }}>
+                          {isUploadingThis ? "Uploading..." : "+ Add Image"}
+                        </span>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                          onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
+                      </label>
                     )}
 
                     {isRegenerating ? (

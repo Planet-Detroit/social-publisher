@@ -23,7 +23,8 @@ export interface PublishResult {
 export async function publishPosts(
   posts: Record<string, string>,
   selectedPlatforms: string[],
-  imageUrl: string | null
+  imageUrl: string | null,
+  platformImages: Record<string, string> = {}
 ): Promise<PublishResult[]> {
   const results: PublishResult[] = [];
 
@@ -40,8 +41,11 @@ export async function publishPosts(
       continue;
     }
 
+    // Use platform-specific image if set, otherwise fall back to shared image
+    const platformImageUrl = platformImages[platform] || imageUrl;
+
     console.log(`Publishing to ${platform}...`);
-    const result = await service.publish(content, imageUrl);
+    const result = await service.publish(content, platformImageUrl);
     results.push({ platform, ...result });
   }
 

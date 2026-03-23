@@ -8,13 +8,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { posts, platforms, imageUrl, articleUrl, articleTitle } = await req.json();
+  const { posts, platforms, imageUrl, platformImages, articleUrl, articleTitle } = await req.json();
   if (!posts || !platforms || !platforms.length) {
     return NextResponse.json({ error: 'Posts and platforms are required' }, { status: 400 });
   }
 
   try {
-    const results = await publishPosts(posts, platforms, imageUrl || null);
+    const results = await publishPosts(posts, platforms, imageUrl || null, platformImages || {});
 
     // Save to history
     try {
