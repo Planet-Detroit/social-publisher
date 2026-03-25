@@ -61,6 +61,29 @@ const PLATFORMS = [
 
 const ALL_PLATFORM_KEYS = PLATFORMS.map(p => p.key);
 
+// Build a direct link to a published post from the platform name and post ID
+function getPostUrl(platform: string, id?: string): string | null {
+  if (!id) return null;
+  switch (platform) {
+    case "twitter":
+      return `https://x.com/PlanetDetroit/status/${id}`;
+    case "bluesky": {
+      // ID is an AT URI like at://did:plc:.../app.bsky.feed.post/rkey
+      const rkey = id.split("/").pop();
+      return rkey ? `https://bsky.app/profile/planetdetroit.org/post/${rkey}` : null;
+    }
+    case "facebook":
+      // ID is typically pageId_postId — link to facebook.com/postId
+      return `https://www.facebook.com/${id}`;
+    case "instagram":
+      // Instagram returns a numeric media ID — no shortcode available,
+      // so we link to the profile instead
+      return "https://www.instagram.com/planetdetroitnews/";
+    default:
+      return null;
+  }
+}
+
 export default function Home() {
   const router = useRouter();
   const freeformRef = useRef<HTMLTextAreaElement>(null);
@@ -607,6 +630,17 @@ export default function Home() {
           <button onClick={() => setError("")} className="float-right font-bold">&times;</button>
         </div>
       )}
+
+      {/* Canva Link */}
+      <div className="mb-4">
+        <a href="https://www.canva.com/design/DAGeScKoXBs/Xo0AHQqhMW-7GWfwkUdmKg/edit?utm_content=DAGeScKoXBs&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton"
+          target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm font-medium transition-colors hover:underline"
+          style={{ color: "#7B2FBE" }}>
+          <span>🎨</span> Create social graphics in Canva
+          <span style={{ color: "#999" }}>&rarr;</span>
+        </a>
+      </div>
 
       {/* Mode Toggle */}
       <div className="flex gap-1 mb-6 p-1 rounded-lg inline-flex" style={{ background: "#F0F0F0" }}>
@@ -1258,10 +1292,17 @@ export default function Home() {
                 <div className="flex gap-1.5 flex-shrink-0">
                   {(Array.isArray(entry.platforms) ? entry.platforms : []).filter(p => p.status === "published").map(p => {
                     const platform = PLATFORMS.find(pl => pl.key === p.platform);
-                    return platform ? (
+                    if (!platform) return null;
+                    const postUrl = getPostUrl(p.platform, p.id);
+                    return postUrl ? (
+                      <a key={p.platform} href={postUrl} target="_blank" rel="noopener noreferrer"
+                        title={`View on ${platform.label}`}
+                        className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold transition-opacity hover:opacity-80"
+                        style={{ background: platform.color }}>{platform.icon}</a>
+                    ) : (
                       <span key={p.platform} className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold"
                         style={{ background: platform.color }}>{platform.icon}</span>
-                    ) : null;
+                    );
                   })}
                 </div>
               </div>
