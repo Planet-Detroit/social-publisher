@@ -40,7 +40,10 @@ export async function GET(req: NextRequest) {
         const platforms = post.platforms as string[];
         const posts = post.posts as Record<string, string>;
         const imageUrl = post.image_url as string | null;
-        const platformImages = (post.platform_images || {}) as Record<string, string>;
+        const rawPlatformImages = (post.platform_images || {}) as Record<string, unknown>;
+        // Extract instagram carousel images stored under special key
+        const instagramImages = (rawPlatformImages._instagram_carousel || []) as string[];
+        const { _instagram_carousel: _, ...platformImages } = rawPlatformImages as Record<string, string>;
         const platformTimes = (post.platform_times || {}) as Record<string, string>;
 
         // If there are per-platform time overrides, only publish platforms
@@ -68,7 +71,7 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        const results = await publishPosts(posts, readyPlatforms, imageUrl, platformImages);
+        const results = await publishPosts(posts, readyPlatforms, imageUrl, platformImages, instagramImages);
 
         if (pendingPlatforms.length > 0) {
           // Some platforms still pending — keep as scheduled with partial results

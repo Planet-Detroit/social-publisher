@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     platforms,
     imageUrl,
     platformImages,
+    instagramImages,
     articleUrl,
     articleTitle,
     scheduledAt,
@@ -37,6 +38,12 @@ export async function POST(req: NextRequest) {
   try {
     await ensureTables();
     const sql = getDb();
+    // Store instagramImages inside platformImages JSONB to avoid schema migration
+    const storedPlatformImages = {
+      ...(platformImages || {}),
+      ...(instagramImages && instagramImages.length > 0 ? { _instagram_carousel: instagramImages } : {}),
+    };
+
     const result = await sql`
       INSERT INTO scheduled_posts (
         article_url, article_title, image_url, platform_images,
@@ -46,7 +53,7 @@ export async function POST(req: NextRequest) {
         ${articleUrl || null},
         ${articleTitle || null},
         ${imageUrl || null},
-        ${JSON.stringify(platformImages || {})},
+        ${JSON.stringify(storedPlatformImages)},
         ${JSON.stringify(posts)},
         ${JSON.stringify(platforms)},
         ${scheduledAt},

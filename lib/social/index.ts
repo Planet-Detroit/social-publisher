@@ -5,7 +5,7 @@ import * as facebook from './facebook';
 import * as instagram from './instagram';
 import * as linkedin from './linkedin';
 
-const platforms: Record<string, { publish: (text: string, imageUrl: string | null) => Promise<{ status: string; id?: string; reason?: string }> }> = {
+const platforms: Record<string, { publish: (text: string, imageUrl: string | null, imageUrls?: string[]) => Promise<{ status: string; id?: string; reason?: string }> }> = {
   bluesky,
   twitter,
   facebook,
@@ -24,7 +24,8 @@ export async function publishPosts(
   posts: Record<string, string>,
   selectedPlatforms: string[],
   imageUrl: string | null,
-  platformImages: Record<string, string> = {}
+  platformImages: Record<string, string> = {},
+  instagramImages: string[] = []
 ): Promise<PublishResult[]> {
   const results: PublishResult[] = [];
 
@@ -44,8 +45,13 @@ export async function publishPosts(
     // Use platform-specific image if set, otherwise fall back to shared image
     const platformImageUrl = platformImages[platform] || imageUrl;
 
+    // For Instagram, pass the carousel images array if available
+    const igImages = platform === 'instagram' && instagramImages.length > 0
+      ? instagramImages
+      : undefined;
+
     console.log(`Publishing to ${platform}...`);
-    const result = await service.publish(content, platformImageUrl);
+    const result = await service.publish(content, platformImageUrl, igImages);
     results.push({ platform, ...result });
   }
 

@@ -89,6 +89,9 @@ export default function Home() {
   const [scheduledTime, setScheduledTime] = useState("");
   const [scheduling, setScheduling] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledEntry[]>([]);
+  const [instagramImages, setInstagramImages] = useState<string[]>([]);
+  const [uploadingIgImage, setUploadingIgImage] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -118,6 +121,7 @@ export default function Home() {
     setEditingPost(null);
     setCustomImageUrl(null);
     setPlatformImages({});
+    setInstagramImages([]);
     setShowEmojiPicker(false);
     setShowScheduler(false);
     setScheduledTime("");
@@ -252,6 +256,91 @@ export default function Home() {
     return platformImages[platform] || effectiveImageUrl;
   }
 
+  // Instagram multi-image carousel support
+  async function handleIgImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const maxImages = 10; // Instagram carousel max
+
+    if (instagramImages.length + files.length > maxImages) {
+      setError(`Instagram carousels support up to ${maxImages} images. You have ${instagramImages.length} already.`);
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingIgImage(true);
+    setError('');
+    const newUrls: string[] = [];
+
+    for (const file of Array.from(files)) {
+      if (!allowedTypes.includes(file.type)) {
+        setError('Invalid file type. Accepted: JPG, PNG, WebP');
+        break;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File too large. Maximum size is 5MB per image.');
+        break;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) {
+          const data = await res.json();
+          setError(data.error || 'Failed to upload image');
+          break;
+        }
+        const { url } = await res.json();
+        newUrls.push(url);
+      } catch {
+        setError('Failed to upload image');
+        break;
+      }
+    }
+
+    if (newUrls.length > 0) {
+      setInstagramImages(prev => [...prev, ...newUrls]);
+    }
+    setUploadingIgImage(false);
+    e.target.value = '';
+  }
+
+  function handleIgImageRemove(index: number) {
+    const url = instagramImages[index];
+    // Clean up blob in background
+    if (url) {
+      fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      }).catch(() => {});
+    }
+    setInstagramImages(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function handleIgDragStart(index: number) {
+    setDragIndex(index);
+  }
+
+  function handleIgDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+    setInstagramImages(prev => {
+      const next = [...prev];
+      const [dragged] = next.splice(dragIndex, 1);
+      next.splice(index, 0, dragged);
+      return next;
+    });
+    setDragIndex(index);
+  }
+
+  function handleIgDragEnd() {
+    setDragIndex(null);
+  }
+
   async function handleFetchUrl() {
     if (!url.trim()) return;
     setFetching(true);
@@ -350,6 +439,7 @@ export default function Home() {
           platforms: selectedPlatforms,
           imageUrl: effectiveImageUrl,
           platformImages,
+          instagramImages,
           articleUrl: url.trim(),
           articleTitle: article?.title || null,
         }),
@@ -385,6 +475,7 @@ export default function Home() {
           platforms: selectedPlatforms,
           imageUrl: effectiveImageUrl,
           platformImages,
+          instagramImages,
           articleUrl: url.trim(),
           articleTitle: article?.title || null,
           scheduledAt,
@@ -779,40 +870,129 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {cardImageUrl && (
-                      <div className="rounded-lg overflow-hidden mb-3 relative group" style={{ background: "#F0F0F0" }}>
-                        <img src={cardImageUrl} alt="" className="w-full h-44 object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                        {/* Per-platform image controls overlay */}
-                        <div className="absolute bottom-0 left-0 right-0 flex gap-1.5 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.6))" }}>
-                          <label className="px-2 py-1 rounded text-xs font-medium cursor-pointer"
-                            style={{ background: "rgba(255,255,255,0.9)", color: "#333" }}>
-                            {isUploadingThis ? "..." : "Swap"}
+                    {/* Instagram: multi-image carousel UI */}
+                    {key === "instagram" ? (
+                      <div className="mb-3">
+                        {/* Show carousel images if any, otherwise show the single shared image */}
+                        {instagramImages.length > 0 ? (
+                          <div>
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {instagramImages.map((imgUrl, idx) => (
+                                <div
+                                  key={imgUrl}
+                                  draggable
+                                  onDragStart={() => handleIgDragStart(idx)}
+                                  onDragOver={(e) => handleIgDragOver(e, idx)}
+                                  onDragEnd={handleIgDragEnd}
+                                  className="relative flex-shrink-0 group rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
+                                  style={{
+                                    width: 100, height: 100,
+                                    border: dragIndex === idx ? "2px solid #E1306C" : "2px solid transparent",
+                                    opacity: dragIndex === idx ? 0.6 : 1,
+                                  }}>
+                                  <img src={imgUrl} alt={`Slide ${idx + 1}`} className="w-full h-full object-cover" />
+                                  <div className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                                    style={{ background: "#E1306C" }}>{idx + 1}</div>
+                                  <button
+                                    onClick={() => handleIgImageRemove(idx)}
+                                    className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                                    style={{ background: "rgba(0,0,0,0.6)" }}>&times;</button>
+                                </div>
+                              ))}
+                              {/* Add more images button */}
+                              {instagramImages.length < 10 && (
+                                <label className="relative flex-shrink-0 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors"
+                                  style={{ width: 100, height: 100, background: "#F0F0F0", border: "1px dashed #CCCCCC" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}>
+                                  <span className="text-lg" style={{ color: "#999" }}>+</span>
+                                  <span className="text-xs" style={{ color: "#999" }}>Add</span>
+                                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
+                                    onChange={handleIgImageUpload} disabled={uploadingIgImage} />
+                                </label>
+                              )}
+                            </div>
+                            <p className="text-xs mt-1" style={{ color: "#999" }}>
+                              {instagramImages.length}/10 images · Drag to reorder · First image is the cover
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Show shared image with option to start a carousel */}
+                            {cardImageUrl && (
+                              <div className="rounded-lg overflow-hidden relative group" style={{ background: "#F0F0F0" }}>
+                                <img src={cardImageUrl} alt="" className="w-full h-44 object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                <div className="absolute bottom-0 left-0 right-0 flex gap-1.5 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.6))" }}>
+                                  <label className="px-2 py-1 rounded text-xs font-medium cursor-pointer"
+                                    style={{ background: "rgba(255,255,255,0.9)", color: "#333" }}>
+                                    {isUploadingThis ? "..." : "Swap"}
+                                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                                      onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
+                                  </label>
+                                  {hasCustomPlatformImage && (
+                                    <button onClick={() => handleRemovePlatformImage(key)}
+                                      className="px-2 py-1 rounded text-xs font-medium"
+                                      style={{ background: "rgba(255,255,255,0.9)", color: "#DD3333" }}>
+                                      Reset
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <label className="px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors"
+                                style={{ background: "#FFFFFF", border: "1px solid #E1306C", color: "#E1306C" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "#fef2f6"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
+                                {uploadingIgImage ? "Uploading..." : "+ Carousel Images"}
+                                <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
+                                  onChange={handleIgImageUpload} disabled={uploadingIgImage} />
+                              </label>
+                              <span className="text-xs" style={{ color: "#999" }}>Upload 2-10 images for a slide carousel</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {/* Non-Instagram platforms: single image */}
+                        {cardImageUrl && (
+                          <div className="rounded-lg overflow-hidden mb-3 relative group" style={{ background: "#F0F0F0" }}>
+                            <img src={cardImageUrl} alt="" className="w-full h-44 object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            <div className="absolute bottom-0 left-0 right-0 flex gap-1.5 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.6))" }}>
+                              <label className="px-2 py-1 rounded text-xs font-medium cursor-pointer"
+                                style={{ background: "rgba(255,255,255,0.9)", color: "#333" }}>
+                                {isUploadingThis ? "..." : "Swap"}
+                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                                  onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
+                              </label>
+                              {hasCustomPlatformImage && (
+                                <button onClick={() => handleRemovePlatformImage(key)}
+                                  className="px-2 py-1 rounded text-xs font-medium"
+                                  style={{ background: "rgba(255,255,255,0.9)", color: "#DD3333" }}>
+                                  Reset
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {!cardImageUrl && (
+                          <label className="rounded-lg mb-3 flex items-center justify-center cursor-pointer transition-colors h-20"
+                            style={{ background: "#F0F0F0", border: "1px dashed #CCCCCC" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}>
+                            <span className="text-xs font-medium" style={{ color: "#999" }}>
+                              {isUploadingThis ? "Uploading..." : "+ Add Image"}
+                            </span>
                             <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
                               onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
                           </label>
-                          {hasCustomPlatformImage && (
-                            <button onClick={() => handleRemovePlatformImage(key)}
-                              className="px-2 py-1 rounded text-xs font-medium"
-                              style={{ background: "rgba(255,255,255,0.9)", color: "#DD3333" }}>
-                              Reset
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {!cardImageUrl && (
-                      <label className="rounded-lg mb-3 flex items-center justify-center cursor-pointer transition-colors h-20"
-                        style={{ background: "#F0F0F0", border: "1px dashed #CCCCCC" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e5e5"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}>
-                        <span className="text-xs font-medium" style={{ color: "#999" }}>
-                          {isUploadingThis ? "Uploading..." : "+ Add Image"}
-                        </span>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-                          onChange={(e) => handlePlatformImageUpload(key, e)} disabled={isUploadingThis} />
-                      </label>
+                        )}
+                      </>
                     )}
 
                     {isRegenerating ? (
