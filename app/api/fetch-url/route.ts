@@ -19,19 +19,41 @@ async function fetchFromWordPress(url: string) {
     if (!posts.length) return null;
 
     const post = posts[0];
+
+    // Decode HTML entities helper
+    const decodeEntities = (str: string) =>
+      (str || '').replace(/&#8217;/g, "'").replace(/&#8220;|&#8221;/g, '"').replace(/&amp;/g, '&').replace(/&#8230;/g, '…');
+
     // Strip HTML from content
     const bodyText = (post.content?.rendered || '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
+    // Extract subtitle (Newspack theme field)
+    const subtitle = decodeEntities(
+      post.meta?.newspack_post_subtitle ||
+      post.newspack_post_subtitle ||
+      ''
+    );
+
+    // Extract excerpt (WordPress summary field, strip HTML)
+    const excerpt = decodeEntities(
+      (post.excerpt?.rendered || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
+
     // Get featured image
     const featuredMedia = post._embedded?.['wp:featuredmedia']?.[0];
     const imageUrl = featuredMedia?.source_url || null;
 
     return {
-      title: post.title?.rendered?.replace(/&#8217;/g, "'").replace(/&#8220;|&#8221;/g, '"').replace(/&amp;/g, '&') || '',
-      description: bodyText.substring(0, 500),
+      title: decodeEntities(post.title?.rendered || ''),
+      subtitle,
+      excerpt,
+      description: subtitle || excerpt || bodyText.substring(0, 500),
       body: bodyText,
       imageUrl,
       source: 'wordpress',

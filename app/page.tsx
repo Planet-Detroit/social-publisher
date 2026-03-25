@@ -6,6 +6,8 @@ import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
 interface ArticleData {
   title: string;
+  subtitle: string;
+  excerpt: string;
   description: string;
   body: string;
   imageUrl: string | null;
@@ -277,6 +279,8 @@ export default function Home() {
     const title = mode === "article" ? article?.title : "";
     const body = mode === "article" ? article?.body : freeformText;
     const articleUrl = mode === "article" ? url.trim() : "";
+    const subtitle = mode === "article" ? article?.subtitle : "";
+    const excerpt = mode === "article" ? article?.excerpt : "";
 
     if (!title && !body) return;
 
@@ -288,7 +292,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || "", body: body || "", url: articleUrl }),
+        body: JSON.stringify({ title: title || "", body: body || "", url: articleUrl, subtitle: subtitle || "", excerpt: excerpt || "" }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -309,11 +313,13 @@ export default function Home() {
       const title = mode === "article" ? article?.title : "";
       const body = mode === "article" ? article?.body : freeformText;
       const articleUrl = mode === "article" ? url.trim() : "";
+      const subtitle = mode === "article" ? article?.subtitle : "";
+      const excerpt = mode === "article" ? article?.excerpt : "";
 
       const res = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform, title: title || "", body: body || "", url: articleUrl }),
+        body: JSON.stringify({ platform, title: title || "", body: body || "", url: articleUrl, subtitle: subtitle || "", excerpt: excerpt || "" }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -463,12 +469,12 @@ export default function Home() {
     if (draft.image_url && draft.image_url.includes('blob.vercel-storage.com')) {
       setCustomImageUrl(draft.image_url);
       if (draft.article_title) {
-        setArticle({ title: draft.article_title, description: "", body: "", imageUrl: null, source: "draft" });
+        setArticle({ title: draft.article_title, subtitle: "", excerpt: "", description: "", body: "", imageUrl: null, source: "draft" });
       }
     } else {
       setCustomImageUrl(null);
       if (draft.article_title) {
-        setArticle({ title: draft.article_title, description: "", body: "", imageUrl: draft.image_url, source: "draft" });
+        setArticle({ title: draft.article_title, subtitle: "", excerpt: "", description: "", body: "", imageUrl: draft.image_url, source: "draft" });
       }
     }
     setPosts(draft.posts);
@@ -644,11 +650,17 @@ export default function Home() {
             )}
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold mb-1" style={{ color: "#111111" }}>{article.title}</h2>
+              {article.subtitle && (
+                <p className="text-sm font-medium mb-1" style={{ color: "#2982C4", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}>
+                  {article.subtitle}
+                </p>
+              )}
               <p className="text-sm line-clamp-3" style={{ color: "#515151", fontFamily: "Georgia, garamond, 'Times New Roman', serif" }}>
-                {article.description}
+                {article.excerpt || article.description}
               </p>
               <p className="text-xs mt-2" style={{ color: "#999" }}>
                 Source: {article.source === "wordpress" ? "Planet Detroit (WordPress API)" : "Open Graph"}
+                {article.source === "wordpress" && (article.subtitle || article.excerpt) && " · Posts based on subtitle & summary"}
               </p>
             </div>
           </div>

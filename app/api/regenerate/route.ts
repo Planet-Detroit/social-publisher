@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 });
   }
 
-  const { platform, title, body, url } = await req.json();
+  const { platform, title, body, url, subtitle, excerpt } = await req.json();
   if (!platform || !title) {
     return NextResponse.json({ error: 'Platform and title are required' }, { status: 400 });
   }
@@ -32,12 +32,25 @@ export async function POST(req: NextRequest) {
   try {
     const client = new Anthropic();
 
+    // Prioritize subtitle and excerpt as source material
+    const hasSubtitle = subtitle && subtitle.trim();
+    const hasExcerpt = excerpt && excerpt.trim();
+    const hasEditorialSummary = hasSubtitle || hasExcerpt;
+
+    let sourceSection = `- Headline: ${title}`;
+    if (hasEditorialSummary) {
+      if (hasSubtitle) sourceSection += `\n- Subtitle: ${subtitle}`;
+      if (hasExcerpt) sourceSection += `\n- Summary: ${excerpt}`;
+      sourceSection += `\n\nBase your post strictly on the headline, subtitle, and summary above. These are the editor-approved descriptions. Do not invent details beyond what is provided.`;
+    } else {
+      sourceSection += `\n- Content: ${(body || '').substring(0, 3000)}`;
+    }
+
     const prompt = `Generate a single social media post for ${platform} about this article.
 
 ARTICLE DETAILS:
-- Headline: ${title}
+${sourceSection}
 ${url ? `- URL: ${url}` : ''}
-- Content: ${(body || '').substring(0, 3000)}
 
 INSTRUCTIONS: ${instruction}
 ${url ? `Include this URL in the post: ${url}` : ''}

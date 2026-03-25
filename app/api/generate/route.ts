@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 });
   }
 
-  const { title, body, url } = await req.json();
+  const { title, body, url, subtitle, excerpt } = await req.json();
   if (!title && !body) {
     return NextResponse.json({ error: 'Title or content is required' }, { status: 400 });
   }
@@ -25,11 +25,28 @@ export async function POST(req: NextRequest) {
       : 'No URL to include.';
     const charNote = hasUrl ? ' INCLUDING the URL' : '';
 
+    // Build source material section — prioritize subtitle and excerpt
+    const hasSubtitle = subtitle && subtitle.trim();
+    const hasExcerpt = excerpt && excerpt.trim();
+    const hasEditorialSummary = hasSubtitle || hasExcerpt;
+
+    let sourceSection = '';
+    if (hasEditorialSummary) {
+      sourceSection = `${title ? `HEADLINE: ${title}` : ''}
+${hasSubtitle ? `SUBTITLE: ${subtitle}` : ''}
+${hasExcerpt ? `SUMMARY: ${excerpt}` : ''}
+
+BASE YOUR POSTS STRICTLY ON THE HEADLINE, SUBTITLE, AND SUMMARY ABOVE. These are the editor-approved descriptions of the article. Do not invent details or add information beyond what is provided. You may rephrase for each platform's style, but the substance must come from these fields.`;
+    } else {
+      // Freeform mode or external URLs without subtitle/excerpt — fall back to body
+      sourceSection = `${title ? `HEADLINE: ${title}` : ''}
+CONTENT: ${(body || title || '').substring(0, 3000)}`;
+    }
+
     const prompt = `Generate social media posts for Planet Detroit.
 
-${title ? `HEADLINE: ${title}` : ''}
+${sourceSection}
 ${hasUrl ? `URL: ${url}` : ''}
-CONTENT: ${(body || title || '').substring(0, 3000)}
 
 ${urlInstruction}
 
