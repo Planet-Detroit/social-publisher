@@ -115,6 +115,7 @@ export default function Home() {
   const [instagramImages, setInstagramImages] = useState<string[]>([]);
   const [uploadingIgImage, setUploadingIgImage] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [masterDraft, setMasterDraft] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -146,6 +147,7 @@ export default function Home() {
     setPlatformImages({});
     setInstagramImages([]);
     setShowEmojiPicker(false);
+    setMasterDraft("");
     setShowScheduler(false);
     setScheduledTime("");
     setError("");
@@ -411,7 +413,10 @@ export default function Home() {
         setError(data.error || "Failed to generate posts");
         return;
       }
-      setPosts(await res.json());
+      const generated = await res.json();
+      setPosts(generated);
+      // Pre-fill master draft with Facebook post (most balanced length)
+      setMasterDraft(generated.facebook || generated.linkedin || Object.values(generated)[0] || "");
     } catch {
       setError("Failed to generate posts");
     } finally {
@@ -536,6 +541,15 @@ export default function Home() {
   function updatePost(key: string, value: string) {
     if (!posts) return;
     setPosts({ ...posts, [key]: value });
+  }
+
+  function applyMasterDraft() {
+    if (!posts || !masterDraft.trim()) return;
+    const updated = { ...posts };
+    for (const key of Object.keys(updated)) {
+      updated[key] = masterDraft;
+    }
+    setPosts(updated);
   }
 
   function copyToClipboard(text: string, field: string) {
@@ -847,6 +861,41 @@ export default function Home() {
               onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}>
               {generating ? "Regenerating..." : "Regenerate All"}
             </button>
+          </div>
+
+          {/* Master Draft */}
+          <div className="mb-6 rounded-xl overflow-hidden" style={{ background: "#FFFFFF", border: "2px solid #2982C4" }}>
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "#EBF4FA", borderBottom: "1px solid #B8D8F0" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold" style={{ color: "#111111" }}>Master Draft</span>
+                <span className="text-xs" style={{ color: "#515151" }}>Edit here, then apply to all platforms</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(masterDraft); setCopiedField("master"); setTimeout(() => setCopiedField(null), 2000); }}
+                  className="text-xs px-2.5 py-1 rounded font-medium transition-colors"
+                  style={{ background: "#FFFFFF", border: "1px solid #CCCCCC", color: "#515151" }}>
+                  {copiedField === "master" ? "Copied!" : "Copy"}
+                </button>
+                <button
+                  onClick={applyMasterDraft}
+                  disabled={!masterDraft.trim()}
+                  className="text-xs px-3 py-1 rounded font-medium text-white transition-colors disabled:opacity-40"
+                  style={{ background: "#2982C4" }}>
+                  Apply to all platforms
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={masterDraft}
+                onChange={(e) => setMasterDraft(e.target.value)}
+                rows={Math.max(4, masterDraft.split("\n").length + 1)}
+                className="w-full text-sm leading-relaxed resize-y rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#2982C4]"
+                style={{ background: "#FAFAFA", border: "1px solid #E0E0E0", color: "#111111" }}
+                placeholder="Write or edit your post text here, then apply it to all platforms at once..."
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
