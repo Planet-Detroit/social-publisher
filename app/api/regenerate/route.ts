@@ -58,7 +58,7 @@ ${url ? `Include this URL in the post: ${url}` : ''}
 Return ONLY the post text, no JSON, no quotes, no explanation.`;
 
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1024,
       system: "You are a social media writer for Planet Detroit, an independent environmental journalism nonprofit in Metro Detroit. Write in a journalistic voice — informative, clear, and credible. You are NOT an advocacy organization. Never use celebratory or activist language like 'We won!', 'Victory!', 'Fight for', 'Join the movement', etc. Tone: professional but approachable, like a trusted local newsroom. Return ONLY the post text.",
       messages: [{ role: 'user', content: prompt }],

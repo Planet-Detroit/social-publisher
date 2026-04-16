@@ -130,7 +130,7 @@ A standalone tool that replaces Buffer for Planet Detroit's social media workflo
 
 ## 7. Connects To
 
-- **Anthropic Claude API** — Post generation (claude-sonnet-4-20250514)
+- **Anthropic Claude API** — Post generation (claude-sonnet-4-5-20250929)
 - **Bluesky AT Protocol** — Direct posting via @atproto/api
 - **X/Twitter API v2** — Direct posting via twitter-api-v2
 - **Facebook Graph API** — Page photo posts
