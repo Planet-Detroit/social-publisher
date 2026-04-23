@@ -118,11 +118,7 @@ export default function Home() {
   const [masterDraft, setMasterDraft] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/auth/check").then(r => r.json()).then(d => {
-      if (!d.authenticated) router.push("/login");
-    });
-  }, [router]);
+  // Auth is handled by middleware — no client-side check needed.
 
   const loadHistory = useCallback(() => {
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
