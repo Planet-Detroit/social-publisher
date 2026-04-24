@@ -49,14 +49,12 @@ export async function proxy(request: NextRequest) {
 
   if (user) return response;
 
-  // No Supabase session — also check old cookie as fallback
-  const session = request.cookies.get('social-publisher-session');
-  if (session?.value === 'authenticated') {
-    return NextResponse.next();
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const loginUrl = new URL('/login', request.url);
-  loginUrl.searchParams.set('next', pathname);
+  const loginUrl = new URL('https://tools.planetdetroit.org/login');
+  loginUrl.searchParams.set('next', request.url);
   return NextResponse.redirect(loginUrl);
 }
 
