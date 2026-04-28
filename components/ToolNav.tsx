@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { getSupabase } from "@/lib/supabase-browser";
 
 const tools = [
   { label: "Brief Generator", href: "https://brief.tools.planetdetroit.org/" },
@@ -15,8 +16,9 @@ export default function ToolNav() {
   if (pathname === "/login") return null;
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    const supabase = getSupabase();
+    await supabase.auth.signOut();
+    window.location.href = "https://tools.planetdetroit.org/";
   };
 
   return (

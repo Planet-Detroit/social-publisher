@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 
 // Extract article content from a URL using Open Graph tags and meta data
 // For planetdetroit.org URLs, uses the WordPress REST API for full content
@@ -115,9 +114,6 @@ async function fetchFromOpenGraph(url: string) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const { url } = await req.json();
   if (!url) {

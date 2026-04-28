@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { isAuthenticated } from '@/lib/auth';
 
 const PLATFORM_INSTRUCTIONS: Record<string, string> = {
   instagram: 'Instagram caption with relevant hashtags (include #PlanetDetroit #Detroit #Michigan). End with the URL.',
@@ -11,9 +10,6 @@ const PLATFORM_INSTRUCTIONS: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 });

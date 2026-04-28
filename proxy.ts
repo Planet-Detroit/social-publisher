@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/cron', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/cron'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,13 +13,10 @@ export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If Supabase isn't configured, fall back to the old cookie-based auth
   if (!supabaseUrl || !supabaseKey) {
-    const session = request.cookies.get('social-publisher-session');
-    if (session?.value === 'authenticated') {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('https://tools.planetdetroit.org/login');
+    loginUrl.searchParams.set('next', request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Supabase auth path

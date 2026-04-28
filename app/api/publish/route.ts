@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { publishPosts } from '@/lib/social';
 import { getDb, ensureTables } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const { posts, platforms, imageUrl, platformImages, instagramImages, articleUrl, articleTitle } = await req.json();
   if (!posts || !platforms || !platforms.length) {

@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { getDb, ensureTables } from '@/lib/db';
 
 // List scheduled posts (upcoming first, then recent published)
 export async function GET() {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     await ensureTables();
@@ -30,9 +26,6 @@ export async function GET() {
 
 // Cancel a scheduled post
 export async function DELETE(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');

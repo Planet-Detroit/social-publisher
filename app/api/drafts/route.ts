@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { getDb, ensureTables } from '@/lib/db';
 
 // GET /api/drafts — list saved drafts
 export async function GET() {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     await ensureTables();
@@ -26,9 +22,6 @@ export async function GET() {
 
 // POST /api/drafts — save a new draft
 export async function POST(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const { articleUrl, articleTitle, articleBody, imageUrl, posts, mode, freeformText } = await req.json();
   if (!posts) {
@@ -52,9 +45,6 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/drafts?id=123 — delete a draft
 export async function DELETE(req: NextRequest) {
-  if (!await isAuthenticated()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const id = req.nextUrl.searchParams.get('id');
   if (!id) {
